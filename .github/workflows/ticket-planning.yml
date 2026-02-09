@@ -1,0 +1,285 @@
+name: Ticket Planning Workflow
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_call:
+    inputs:
+      ticket_id:
+        description: 'Specific ticket ID to plan (optional)'
+        required: false
+        type: string
+      trigger_type:
+        description: 'The event type that triggered the caller (push or workflow_dispatch)'
+        required: true
+        type: string
+      base_sha:
+        description: 'Base SHA for push events (github.event.before)'
+        required: false
+        type: string
+      ref_name:
+        description: 'Branch ref name (github.ref_name)'
+        required: true
+        type: string
+    secrets:
+      GLM_ANTHROPIC_BASE_URL:
+        required: false
+      GLM_ANTHROPIC_AUTH_TOKEN:
+        required: false
+
+jobs:
+  find-tickets:
+    name: Find tickets to process
+    runs-on: self-hosted
+    outputs:
+      tickets: ${{ steps.planning-tickets.outputs.tickets }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Claude Code Planning Agent"
+          git config --global user.email "claude-planning@github-actions.local"
+
+      - name: Find tickets to process
+        id: planning-tickets
+        run: |
+          set -x  # Enable command logging
+          tickets=()
+          statuses=()
+
+          if [ "${{ inputs.trigger_type }}" = "workflow_dispatch" ] && [ -n "${{ inputs.ticket_id }}" ]; then
+            # Manual trigger with specific ticket
+            ticket_file=".tickets/${{ inputs.ticket_id }}.md"
+            if [ -f "$ticket_file" ]; then
+              status=$(grep -m1 '^status:' "$ticket_file" | sed 's/status: *//')
+              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                tickets+=("$ticket_file")
+                statuses+=("$status")
+              else
+                echo "Error: Ticket status must be 'planning' or 'agent-implementing', found: $status"
+                exit 1
+              fi
+            else
+              echo "Error: Ticket file not found: $ticket_file"
+              exit 1
+            fi
+
+          elif [ "${{ inputs.trigger_type }}" = "workflow_dispatch" ]; then
+            # Manual trigger without ticket_id - scan ALL tickets
+            echo "Scanning all tickets for planning or agent-implementing status..."
+            for file in .tickets/*.md; do
+              if [ -f "$file" ]; then
+                status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
+                if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                  tickets+=("$file")
+                  statuses+=("$status")
+                fi
+              fi
+            done
+
+          else
+            # Push trigger - check only changed files using git
+            # Get the base commit for comparison
+            base_sha="${{ inputs.base_sha }}"
+
+            # Get list of changed .tickets files
+            changed_files=$(git diff --name-only "$base_sha" HEAD -- '*.tickets/**' '.tickets/**' 2>/dev/null || echo "")
+
+            # If no files found or base_sha doesn't exist, fall back to HEAD~1
+            if [ -z "$changed_files" ]; then
+              changed_files=$(git diff --name-only HEAD~1 HEAD -- '*.tickets/**' '.tickets/**' 2>/dev/null || echo "")
+            fi
+
+            for file in $changed_files; do
+              if [ -f "$file" ]; then
+                status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
+                if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                  tickets+=("$file")
+                  statuses+=("$status")
+                fi
+              fi
+            done
+          fi
+
+          if [ ${#tickets[@]} -gt 0 ]; then
+            # Convert arrays to JSON format for matrix
+            # GitHub Actions matrix needs: {"ticket": ["file1", "file2"], "status": ["status1", "status2"]}
+            tickets_json=$(printf '%s\n' "${tickets[@]}" | jq -R . | jq -s -c .)
+            statuses_json=$(printf '%s\n' "${statuses[@]}" | jq -R . | jq -s -c .)
+            matrix=$(jq -n -c --argjson tickets "$tickets_json" --argjson statuses "$statuses_json" '{ticket: $tickets, status: $statuses}')
+            echo "tickets=$matrix" >> $GITHUB_OUTPUT
+            echo "Found tickets to process:"
+            for i in "${!tickets[@]}"; do
+              echo "  ${tickets[$i]} - ${statuses[$i]}"
+            done
+          else
+            echo "tickets={}" >> $GITHUB_OUTPUT
+            echo "No tickets to process found"
+          fi
+
+  process-tickets:
+    name: Process ticket
+    runs-on: self-hosted
+    needs: find-tickets
+    if: needs.find-tickets.outputs.tickets != '{}'
+    strategy:
+      matrix: ${{ fromJson(needs.find-tickets.outputs.tickets) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "Claude Code Planning Agent"
+          git config --global user.email "claude-planning@github-actions.local"
+
+      - name: Extract ticket ID and setup branch
+        id: ticket-setup
+        run: |
+          set -x  # Enable command logging
+          ticket_file="${{ matrix.ticket }}"
+          ticket_status="${{ matrix.status }}"
+          ticket_id=$(basename "$ticket_file" .md)
+
+          echo "ticket_id=$ticket_id" >> $GITHUB_OUTPUT
+          echo "ticket_status=$ticket_status" >> $GITHUB_OUTPUT
+          echo "Processing ticket: $ticket_id (status: $ticket_status)"
+
+          # For planning: create new branch; for agent-implementing: checkout existing branch
+          if [ "$ticket_status" = "planning" ]; then
+            # Check if branch exists
+            if git rev-parse --verify "origin/$ticket_id" >/dev/null 2>&1; then
+              echo "Branch exists, checking out"
+              git checkout "$ticket_id"
+              git pull origin "$ticket_id"
+            else
+              echo "Creating new branch from ${{ inputs.ref_name }}"
+              git checkout "${{ inputs.ref_name }}"
+              git checkout -b "$ticket_id"
+            fi
+          elif [ "$ticket_status" = "agent-implementing" ]; then
+            # Branch should exist from planning phase
+            if git rev-parse --verify "origin/$ticket_id" >/dev/null 2>&1; then
+              echo "Checking out existing branch: $ticket_id"
+              git checkout "$ticket_id"
+              git pull origin "$ticket_id"
+            else
+              echo "Error: Branch $ticket_id not found. Cannot implement a ticket that hasn't been planned."
+              exit 1
+            fi
+          fi
+
+      - name: Run Claude Code
+        env:
+          GLM_ANTHROPIC_BASE_URL: ${{ secrets.GLM_ANTHROPIC_BASE_URL }}
+          GLM_ANTHROPIC_AUTH_TOKEN: ${{ secrets.GLM_ANTHROPIC_AUTH_TOKEN }}
+        run: |
+          set -x  # Enable command logging
+          ticket_file="${{ matrix.ticket }}"
+          ticket_status="${{ steps.ticket-setup.outputs.ticket_status }}"
+          ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
+
+          echo "=========================================="
+          echo "Starting Claude Code for ticket: $ticket_id"
+          echo "Status: $ticket_status"
+          echo "=========================================="
+
+          # Extract assignee and load their credentials
+          assignee=$(grep -m1 '^assignee:' "$ticket_file" | sed 's/assignee: *//' || echo "")
+
+          # Skip ticket if assignee is not opus or glm
+          if [ "$assignee" != "opus" ] && [ "$assignee" != "glm" ]; then
+            echo "Skipping ticket: assignee is '$assignee' (only 'opus' and 'glm' are supported)"
+            exit 0
+          fi
+
+          # Load credentials based on assignee
+          echo "Ticket assigned to: $assignee"
+          if [ "$assignee" = "glm" ]; then
+            echo "Setting GLM credentials"
+            export ANTHROPIC_BASE_URL="$GLM_ANTHROPIC_BASE_URL"
+            export ANTHROPIC_AUTH_TOKEN="$GLM_ANTHROPIC_AUTH_TOKEN"
+          else
+            echo "Using default Anthropic credentials"
+            unset ANTHROPIC_BASE_URL
+            unset ANTHROPIC_AUTH_TOKEN
+          fi
+
+          # Run Claude with appropriate prompt based on status
+          if [ "$ticket_status" = "planning" ]; then
+            claude --dangerously-skip-permissions -p "Review ticket ${ticket_id} and create a detailed plan for implementation. Update the ticket file itself, set the status to 'planned', then commit.
+            You have full authority to update the ticket file directly and commit to git.
+            When formulating your plan, consider:
+              - the code patterns and abstractions currently used in this repository
+              - whether it makes sense to refactor anything in the repository first before proceeding with your plan
+              - all other instructions in AGENTS.md
+
+            " 2>&1 | tee /tmp/claude-output.log
+          elif [ "$ticket_status" = "agent-implementing" ]; then
+            claude --dangerously-skip-permissions -p "Implement the changes described in ticket ${ticket_id}. Follow the plan in the ticket file.
+            Follow all other instructions in AGENTS.md
+            Update the ticket file, set the status to 'implemented', then commit.
+            You have full authority to make code changes, run tests, update the ticket file, commit to git, push and open a pull request." 2>&1 | tee /tmp/claude-output.log
+          fi
+
+          echo "=========================================="
+          echo "Claude Code completed for ticket: $ticket_id"
+          echo "=========================================="
+
+          # Show the updated ticket content
+          echo "Updated ticket content:"
+          cat "$ticket_file"
+
+      - name: Push changes
+        run: |
+          set -x  # Enable command logging
+          ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
+          echo "Pushing branch: $ticket_id"
+          git config --local url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git push origin "$ticket_id"
+          echo "Successfully pushed branch: $ticket_id"
+
+      - name: Create Pull Request
+        run: |
+          set -x  # Enable command logging
+          ticket_file="${{ matrix.ticket }}"
+          ticket_status="${{ steps.ticket-setup.outputs.ticket_status }}"
+          ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
+
+          echo "Creating pull request for ticket: $ticket_id"
+
+          # Extract ticket title and description
+          ticket_title=$(grep -m1 '^# ' "$ticket_file" | sed 's/^# //')
+          if [ -z "$ticket_title" ]; then
+            ticket_title="$ticket_id"
+          fi
+
+          # Get the full ticket content for PR body
+          ticket_content=$(cat "$ticket_file")
+
+          # Check if PR already exists
+          if gh pr view "$ticket_id" --json title --jq '.title' >/dev/null 2>&1; then
+            echo "Pull request already exists for branch: $ticket_id"
+          else
+            echo "Creating new pull request..."
+            gh pr create \
+              --base "master" \
+              --head "$ticket_id" \
+              --title "$ticket_title" \
+              --body "$ticket_content"
+            echo "Successfully created pull request for: $ticket_id"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

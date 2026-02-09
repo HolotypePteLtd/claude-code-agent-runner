@@ -1,0 +1,15 @@
+# Copy this file to .github/workflows/integration-tests.yml in your repository.
+# It calls the reusable workflow from claude-code-agent-runner.
+
+name: Integration Tests
+
+on:
+  push:
+    paths-ignore:
+      - '.tickets/**'
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    uses: HolotypePteLtd/claude-code-agent-runner/.github/workflows/integration-tests.yml@master
+    secrets: inherit

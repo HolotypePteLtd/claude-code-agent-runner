@@ -1,0 +1,35 @@
+# Copy this file to .github/workflows/ticket-planning.yml in your repository.
+# It calls the reusable workflow from claude-code-gha-runner.
+#
+# Required secrets (set in your repo or org settings):
+#   GLM_ANTHROPIC_BASE_URL    - Base URL for GLM-assigned tickets (optional)
+#   GLM_ANTHROPIC_AUTH_TOKEN   - Auth token for GLM-assigned tickets (optional)
+
+name: Ticket Planning
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    paths:
+      - '.tickets/**'
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: 'Specific ticket ID to plan (optional)'
+        required: false
+        type: string
+
+jobs:
+  ticket-planning:
+    uses: HolotypePteLtd/claude-code-agent-runner/.github/workflows/ticket-planning.yml@master
+    with:
+      trigger_type: ${{ github.event_name }}
+      ticket_id: ${{ inputs.ticket_id || '' }}
+      base_sha: ${{ github.event.before || '' }}
+      ref_name: ${{ github.ref_name }}
+    secrets:
+      GLM_ANTHROPIC_BASE_URL: ${{ secrets.GLM_ANTHROPIC_BASE_URL }}
+      GLM_ANTHROPIC_AUTH_TOKEN: ${{ secrets.GLM_ANTHROPIC_AUTH_TOKEN }}

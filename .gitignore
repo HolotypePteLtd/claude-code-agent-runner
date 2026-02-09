@@ -1,0 +1,20 @@
+# Environment variables with secrets
+.env
+
+# GitHub runner configuration
+.runner
+_diag/
+actions-runner/
+*.tar.gz
+
+# SSH keys (if locally mounted for testing)
+*.pem
+id_ed25519
+id_rsa
+
+# Claude config volume mount
+claude-config/
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,73 @@
+name: Integration Tests
+
+on:
+  workflow_call:
+
+jobs:
+  check-pr:
+    name: Check for open PR
+    runs-on: self-hosted
+    outputs:
+      has-pr: ${{ steps.pr-check.outputs.has-pr }}
+    steps:
+      - name: Check if PR exists for this branch
+        id: pr-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          branch="${GITHUB_REF_NAME}"
+          if gh pr list --head "$branch" --json title --jq '. | length' | grep -q '^[1-9]'; then
+            echo "has-pr=true" >> $GITHUB_OUTPUT
+            echo "Open PR found for branch: $branch"
+          else
+            echo "has-pr=false" >> $GITHUB_OUTPUT
+            echo "No open PR for branch: $branch - skipping integration tests"
+          fi
+
+  find-tests:
+    name: Find integration tests
+    runs-on: self-hosted
+    needs: check-pr
+    if: needs.check-pr.outputs.has-pr == 'true'
+    outputs:
+      tests: ${{ steps.list-tests.outputs.tests }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: List integration tests
+        id: list-tests
+        run: |
+          tests=$(ls integration_test/*.dart 2>/dev/null | xargs -n1 basename | jq -R . | jq -s -c .)
+          echo "tests=$tests" >> $GITHUB_OUTPUT
+          echo "Found tests:"
+          ls integration_test/*.dart 2>/dev/null | xargs -n1 basename || echo "No tests found"
+
+  integration-test:
+    name: Test ${{ matrix.test }}
+    runs-on: self-hosted
+    needs: [check-pr, find-tests]
+    if: needs.check-pr.outputs.has-pr == 'true' && needs.find-tests.outputs.tests != '[]'
+    strategy:
+      matrix: ${{ fromJson(needs.find-tests.outputs.tests) }}
+      max-parallel: 1
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ${{ matrix.test }}
+        run: |
+          flutter test integration_test/${{ matrix.test }}
+
+      - name: Commit and push outputs
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add integration_test/outputs/
+          if git diff --staged --quiet; then
+            echo "No output changes to commit"
+          else
+            git commit -m "Update test outputs for ${{ matrix.test }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
