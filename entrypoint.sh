@@ -112,9 +112,14 @@ if [ -f ".runner" ]; then
 else
     log_info "First-time setup, downloading and configuring runner..."
 
-    # Get the latest runner version
-    LATEST_VERSION=$(curl -s "https://api.github.com/repos/actions/runner/releases/latest" | jq -r '.tag_name' | sed 's/v//')
-    log_info "Latest runner version: ${LATEST_VERSION}"
+    # Get the latest runner version (with fallback for API rate limits)
+    FALLBACK_RUNNER_VERSION="2.331.0"
+    LATEST_VERSION=$(curl -s "https://api.github.com/repos/actions/runner/releases/latest" | jq -r '.tag_name // empty' | sed 's/v//')
+    if [ -z "$LATEST_VERSION" ]; then
+        log_warn "Could not fetch latest runner version from GitHub API (rate limited?), using fallback: ${FALLBACK_RUNNER_VERSION}"
+        LATEST_VERSION="$FALLBACK_RUNNER_VERSION"
+    fi
+    log_info "Runner version: ${LATEST_VERSION}"
 
     # Download the runner
     RUNNER_ARCH="x64"
