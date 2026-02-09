@@ -124,7 +124,7 @@ else
     # Download the runner
     RUNNER_ARCH="x64"
     RUNNER_OS="linux"
-    DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${LATEST_VERSION}/actions-runner-${RUNNER_OS}-${RUNNER_ARCH}-${LATEST_VERSION}.tar.gz"
+    DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v2.331.0/actions-runner-linux-x64-2.331.0.tar.gz"
 
     log_info "Downloading runner from: ${DOWNLOAD_URL}"
     curl -o actions-runner.tar.gz -L ${DOWNLOAD_URL}
