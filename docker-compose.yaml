@@ -27,20 +27,9 @@ services:
       - flutter-cache:/opt/flutter/.pub-cache
       - npm-cache:/home/runner/.npm
 
-  runner-3:
-    <<: *runner-common
-    environment:
-      - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-3
-    volumes:
-      - runner-data-3:/actions-runner
-      - claude-config:/home/runner/.claude
-      - flutter-cache:/opt/flutter/.pub-cache
-      - npm-cache:/home/runner/.npm
-
 volumes:
   runner-data-1:
   runner-data-2:
-  runner-data-3:
   claude-config:
   flutter-cache:
   npm-cache:
