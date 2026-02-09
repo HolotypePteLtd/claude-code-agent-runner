@@ -66,6 +66,14 @@ RUN mkdir -p /home/runner/.ssh && \
     chown -R runner:runner /home/runner/.ssh && \
     chmod 700 /home/runner/.ssh
 
+# Install GitHub Actions Runner
+RUN ACTIONS_RUNNER_VERSION="2.331.0" && \
+    DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${ACTIONS_RUNNER_VERSION}/actions-runner-linux-x64-${ACTIONS_RUNNER_VERSION}.tar.gz" && \
+    curl -o /tmp/actions-runner.tar.gz -L ${DOWNLOAD_URL} && \
+    mkdir -p /actions-runner && \
+    tar xzf /tmp/actions-runner.tar.gz -C /actions-runner && \
+    rm /tmp/actions-runner.tar.gz
+
 # Create working directory for actions runner
 WORKDIR /actions-runner
 
