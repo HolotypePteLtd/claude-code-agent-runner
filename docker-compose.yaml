@@ -1,57 +1,46 @@
+x-runner-common: &runner-common
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  restart: unless-stopped
+
 services:
-  runner:
-    platform: linux/amd64
-    build:
-      context: .
-      dockerfile: Dockerfile
+  runner-1:
+    <<: *runner-common
     environment:
-      # GitHub Configuration (set GITHUB_REPO_URL for repo-level, or GITHUB_OWNER_URL for org-level)
-      - GITHUB_REPO_URL=${GITHUB_REPO_URL}
-      - GITHUB_OWNER_URL=${GITHUB_OWNER_URL}
-      - GITHUB_RUNNER_TOKEN=${GITHUB_RUNNER_TOKEN}
-      - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-docker-runner}
-
-      # Claude / Anthropic Configuration
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-
-      # SSH key injection (base64-encoded private key for git push access)
-      - SSH_PRIVATE_KEY_BASE64=${SSH_PRIVATE_KEY_BASE64}
-
-      # Set to "true" to pause the container for manual setup (e.g. claude login)
-      - SETUP_MODE=${SETUP_MODE:-false}
-
-      # Git Configuration
-      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-Claude Code Planning Agent}
-      - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}
-
-      # Runner labels and group
-      - GITHUB_RUNNER_LABELS=${GITHUB_RUNNER_LABELS:-docker,ubuntu,flutter}
-      - GITHUB_RUNNER_GROUP=${GITHUB_RUNNER_GROUP:-default}
+      - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-1
     volumes:
-      # Persist runner configuration and state
-      - runner-data:/actions-runner
-
-      # Persist Claude configuration
+      - runner-data-1:/actions-runner
       - claude-config:/home/runner/.claude
-
-      # Persist Flutter cache
       - flutter-cache:/opt/flutter/.pub-cache
-
-      # Persist npm cache
       - npm-cache:/home/runner/.npm
 
-      ## Optional: uncomment to mount credentials from host instead of env vars
-      # - ${HOME}/.ssh/claude_agent:/home/runner/.ssh/id_ed25519:ro
-      # - ${HOME}/.ssh/claude_agent.pub:/home/runner/.ssh/id_ed25519.pub:ro
-      # - ${HOME}/.ssh/known_hosts:/home/runner/.ssh/known_hosts:ro
-      # - ${HOME}/.claude.json:/home/runner/.claude.json
+  runner-2:
+    <<: *runner-common
+    environment:
+      - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-2
+    volumes:
+      - runner-data-2:/actions-runner
+      - claude-config:/home/runner/.claude
+      - flutter-cache:/opt/flutter/.pub-cache
+      - npm-cache:/home/runner/.npm
 
-    restart: unless-stopped
+  runner-3:
+    <<: *runner-common
+    environment:
+      - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-3
+    volumes:
+      - runner-data-3:/actions-runner
+      - claude-config:/home/runner/.claude
+      - flutter-cache:/opt/flutter/.pub-cache
+      - npm-cache:/home/runner/.npm
 
 volumes:
-  runner-data:
+  runner-data-1:
+  runner-data-2:
+  runner-data-3:
   claude-config:
   flutter-cache:
   npm-cache:
