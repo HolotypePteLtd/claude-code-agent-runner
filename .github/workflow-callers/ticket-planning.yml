@@ -25,6 +25,7 @@ on:
 
 jobs:
   ticket-planning:
+    if: github.event.before != '0000000000000000000000000000000000000000'
     uses: HolotypePteLtd/claude-code-agent-runner/.github/workflows/ticket-planning.yml@master
     with:
       trigger_type: ${{ github.event_name }}
