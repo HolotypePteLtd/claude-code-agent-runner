@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       trigger_type:
-        description: 'The event type that triggered the caller (push or workflow_dispatch)'
+        description: 'The event type that triggered the caller (push, create, or workflow_dispatch)'
         required: true
         type: string
       base_sha:
@@ -85,9 +85,28 @@ jobs:
               fi
             done
 
+          elif [ "${{ inputs.trigger_type }}" = "create" ]; then
+            # Branch creation trigger - only process the ticket file matching this branch name
+            branch_name="${{ inputs.ref_name }}"
+            echo "Branch created: $branch_name"
+            ticket_file=".tickets/${branch_name}.md"
+
+            if [ -f "$ticket_file" ]; then
+              status=$(grep -m1 '^status:' "$ticket_file" | sed 's/status: *//')
+              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                tickets+=("$ticket_file")
+                statuses+=("$status")
+                echo "Found matching ticket file: $ticket_file (status: $status)"
+              else
+                echo "Ticket file $ticket_file exists but has status: $status (not planning or agent-implementing)"
+              fi
+            else
+              echo "No matching ticket file found: $ticket_file"
+            fi
+
           else
             # Push trigger - check only changed files using git
-            # Get the base commit for comparison
+            branch_name="${{ inputs.ref_name }}"
             base_sha="${{ inputs.base_sha }}"
 
             # Get list of changed .tickets files
@@ -98,15 +117,32 @@ jobs:
               changed_files=$(git diff --name-only HEAD~1 HEAD -- '*.tickets/**' '.tickets/**' 2>/dev/null || echo "")
             fi
 
-            for file in $changed_files; do
-              if [ -f "$file" ]; then
-                status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
-                if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
-                  tickets+=("$file")
-                  statuses+=("$status")
+            if [ "$branch_name" = "master" ]; then
+              # On master: process all changed ticket files
+              for file in $changed_files; do
+                if [ -f "$file" ]; then
+                  status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
+                  if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                    tickets+=("$file")
+                    statuses+=("$status")
+                  fi
                 fi
-              fi
-            done
+              done
+            else
+              # On feature branch: only process the ticket file matching this branch name
+              ticket_file=".tickets/${branch_name}.md"
+              for file in $changed_files; do
+                if [ "$file" = "$ticket_file" ]; then
+                  if [ -f "$file" ]; then
+                    status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
+                    if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                      tickets+=("$file")
+                      statuses+=("$status")
+                    fi
+                  fi
+                fi
+              done
+            fi
           fi
 
           if [ ${#tickets[@]} -gt 0 ]; then

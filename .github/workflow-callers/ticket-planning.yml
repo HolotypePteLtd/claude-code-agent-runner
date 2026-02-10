@@ -15,6 +15,7 @@ on:
   push:
     paths:
       - '.tickets/**'
+  create:
   workflow_dispatch:
     inputs:
       ticket_id:
@@ -28,7 +29,7 @@ jobs:
     with:
       trigger_type: ${{ github.event_name }}
       ticket_id: ${{ inputs.ticket_id || '' }}
-      base_sha: ${{ github.event.before || '' }}
+      base_sha: ${{ github.event_name == 'push' && github.event.before || '' }}
       ref_name: ${{ github.ref_name }}
     secrets:
       GLM_ANTHROPIC_BASE_URL: ${{ secrets.GLM_ANTHROPIC_BASE_URL }}
