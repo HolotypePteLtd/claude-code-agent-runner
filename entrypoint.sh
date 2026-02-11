@@ -101,7 +101,7 @@ if [ -n "$GITHUB_PAT" ]; then
         -H "Authorization: Bearer ${GITHUB_PAT}" \
         -H "Accept: application/vnd.github+json" \
         "$API_URL")
-    GITHUB_RUNNER_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    GITHUB_RUNNER_TOKEN=$(echo "$RESPONSE" | jq -r '.token')
     if [ -z "$GITHUB_RUNNER_TOKEN" ]; then
         log_error "Failed to generate registration token. API response:"
         echo "$RESPONSE"
