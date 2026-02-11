@@ -206,14 +206,14 @@ jobs:
               git checkout -b "$ticket_id"
             fi
           elif [ "$ticket_status" = "agent-implementing" ]; then
-            # Branch should exist from planning phase
             if git rev-parse --verify "origin/$ticket_id" >/dev/null 2>&1; then
               echo "Checking out existing branch: $ticket_id"
               git checkout "$ticket_id"
               git pull origin "$ticket_id"
             else
-              echo "Error: Branch $ticket_id not found. Cannot implement a ticket that hasn't been planned."
-              exit 1
+              echo "Branch $ticket_id not found, creating new branch from ${{ inputs.ref_name }}"
+              git checkout "${{ inputs.ref_name }}"
+              git checkout -b "$ticket_id"
             fi
           fi
 
