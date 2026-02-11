@@ -107,8 +107,26 @@ if [ -f ".runner" ]; then
     # Configure SSH if keys are available
     setup_ssh
 
-    # Start the runner
-    exec ./run.sh
+    # Start the runner and capture output to detect registration errors
+    log_info "Starting runner..."
+    ./run.sh 2>&1 | tee /tmp/runner-output.log &
+    RUNNER_PID=$!
+
+    # Wait a bit and check if runner started successfully
+    sleep 5
+
+    # Check if runner process is still running and for registration errors
+    if ! kill -0 $RUNNER_PID 2>/dev/null || grep -q "registration has been deleted" /tmp/runner-output.log 2>/dev/null; then
+        log_warn "Runner registration is invalid or expired, reconfiguring..."
+        kill $RUNNER_PID 2>/dev/null || true
+        rm -f .runner
+        log_info "Removed old configuration, retrying setup..."
+        exec "$0" "$@"
+    fi
+
+    # Runner is healthy, wait for it
+    wait $RUNNER_PID
+    exit $?
 else
     log_info "First-time setup, configuring runner..."
 
