@@ -265,8 +265,8 @@ jobs:
             " 2>&1 | tee /tmp/claude-output.log
           elif [ "$ticket_status" = "agent-implementing" ]; then
             claude --dangerously-skip-permissions -p "Implement the changes described in ticket ${ticket_id}. Follow the plan in the ticket file.
-            Follow all other instructions in AGENTS.md
-            Update the ticket file, set the status to 'implemented', then commit.
+            Follow all other instructions in AGENTS.md. Commit regularly and push to this branch.
+            When you have finished, update the ticket file (set the status to 'implemented'), then commit and push.
             You have full authority to make code changes, run tests, update the ticket file, commit to git, push and open a pull request." 2>&1 | tee /tmp/claude-output.log
           fi
 
