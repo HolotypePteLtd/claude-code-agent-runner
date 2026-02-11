@@ -61,19 +61,18 @@ if [ "${SETUP_MODE}" = "true" ] || [ "${SETUP_MODE}" = "1" ]; then
     exec sleep infinity
 fi
 
-# Check required environment variables
-if [ -z "$GITHUB_RUNNER_TOKEN" ]; then
-    log_error "GITHUB_RUNNER_TOKEN is not set"
-    exit 1
-fi
-
 GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-docker-runner}
 
-# Determine the runner URL: prefer repo URL, fall back to owner URL
+# Determine the runner URL and org/repo context
 if [ -n "$GITHUB_REPO_URL" ]; then
     GITHUB_RUNNER_URL="$GITHUB_REPO_URL"
     log_info "Setting up repository-level runner for: ${GITHUB_REPO_URL}"
     log_info "Runner will only process jobs from this repository"
+    # Extract owner/repo for API calls
+    if [[ $GITHUB_REPO_URL =~ github\.com/([^/]+)/([^/]+) ]]; then
+        GITHUB_OWNER="${BASH_REMATCH[1]}"
+        GITHUB_REPO="${BASH_REMATCH[2]}"
+    fi
 elif [ -n "$GITHUB_OWNER_URL" ]; then
     GITHUB_RUNNER_URL="$GITHUB_OWNER_URL"
     if [[ $GITHUB_OWNER_URL =~ github\.com/([^/]+) ]]; then
@@ -86,74 +85,72 @@ else
     exit 1
 fi
 
+# Obtain runner registration token
+# If GITHUB_PAT is set, auto-generate a fresh registration token via the API
+# Otherwise fall back to GITHUB_RUNNER_TOKEN (which expires after ~1 hour)
+if [ -n "$GITHUB_PAT" ]; then
+    log_info "Generating fresh runner registration token using PAT..."
+    if [ -n "$GITHUB_REPO" ]; then
+        # Repo-level runner
+        API_URL="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runners/registration-token"
+    else
+        # Org-level runner
+        API_URL="https://api.github.com/orgs/${GITHUB_OWNER}/actions/runners/registration-token"
+    fi
+    RESPONSE=$(curl -s -X POST \
+        -H "Authorization: Bearer ${GITHUB_PAT}" \
+        -H "Accept: application/vnd.github+json" \
+        "$API_URL")
+    GITHUB_RUNNER_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    if [ -z "$GITHUB_RUNNER_TOKEN" ]; then
+        log_error "Failed to generate registration token. API response:"
+        echo "$RESPONSE"
+        exit 1
+    fi
+    log_info "Registration token obtained successfully"
+elif [ -n "$GITHUB_RUNNER_TOKEN" ]; then
+    log_info "Using provided GITHUB_RUNNER_TOKEN (note: these expire after ~1 hour)"
+else
+    log_error "Either GITHUB_PAT or GITHUB_RUNNER_TOKEN must be set"
+    exit 1
+fi
+
 log_info "Runner name: ${GITHUB_RUNNER_NAME}"
 
-# Check if already configured
+# Always remove old configuration and reconfigure fresh
+# This prevents stale registration issues when tokens expire
 if [ -f ".runner" ]; then
-    log_info "Runner already configured, starting..."
-
-    # Configure git
-    git config --global user.name "${GIT_AUTHOR_NAME:-Claude Code Planning Agent}"
-    git config --global user.email "${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}"
-
-    # Inject SSH key from base64 env var if provided
-    if [ -n "$SSH_PRIVATE_KEY_BASE64" ]; then
-        log_info "Injecting SSH key from SSH_PRIVATE_KEY_BASE64 env var..."
-        mkdir -p /home/runner/.ssh
-        echo "$SSH_PRIVATE_KEY_BASE64" | base64 -d > /home/runner/.ssh/id_ed25519
-        chmod 600 /home/runner/.ssh/id_ed25519
-    fi
-
-    # Configure SSH if keys are available
-    setup_ssh
-
-    # Start the runner and capture output to detect registration errors
-    log_info "Starting runner..."
-    ./run.sh 2>&1 | tee /tmp/runner-output.log
-    EXIT_CODE=$?
-
-    # Check if runner exited due to expired/deleted registration
-    if grep -q "registration has been deleted\|terminated error" /tmp/runner-output.log 2>/dev/null; then
-        log_warn "Runner registration is invalid or expired (exit code: $EXIT_CODE), reconfiguring..."
-        rm -f .runner .credentials .credentials_rsaparams
-        log_info "Removed old configuration, will re-register on next start..."
-        # Re-run entrypoint to reconfigure with current token
-        exec "$0" "$@"
-    fi
-
-    exit $EXIT_CODE
-else
-    log_info "First-time setup, configuring runner..."
-
-    # Configure the runner
-    log_info "Configuring runner..."
-    ./config.sh \
-        --url "${GITHUB_RUNNER_URL}" \
-        --token "${GITHUB_RUNNER_TOKEN}" \
-        --name "${GITHUB_RUNNER_NAME}" \
-        --labels "${GITHUB_RUNNER_LABELS:-docker,ubuntu,flutter}" \
-        --work "_work" \
-        --unattended \
-        --replace
-
-    # Configure git
-    git config --global user.name "${GIT_AUTHOR_NAME:-Claude Code Planning Agent}"
-    git config --global user.email "${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}"
-
-    # Inject SSH key from base64 env var if provided
-    if [ -n "$SSH_PRIVATE_KEY_BASE64" ]; then
-        log_info "Injecting SSH key from SSH_PRIVATE_KEY_BASE64 env var..."
-        mkdir -p /home/runner/.ssh
-        echo "$SSH_PRIVATE_KEY_BASE64" | base64 -d > /home/runner/.ssh/id_ed25519
-        chmod 600 /home/runner/.ssh/id_ed25519
-    fi
-
-    # Configure SSH if keys are available
-    setup_ssh
-
-    log_info "Runner configured successfully!"
-    log_info "Starting runner..."
-
-    # Start the runner
-    exec ./run.sh
+    log_info "Removing old runner configuration to re-register fresh..."
+    rm -f .runner .credentials .credentials_rsaparams
 fi
+
+log_info "Configuring runner..."
+./config.sh \
+    --url "${GITHUB_RUNNER_URL}" \
+    --token "${GITHUB_RUNNER_TOKEN}" \
+    --name "${GITHUB_RUNNER_NAME}" \
+    --labels "${GITHUB_RUNNER_LABELS:-docker,ubuntu,flutter}" \
+    --work "_work" \
+    --unattended \
+    --replace
+
+# Configure git
+git config --global user.name "${GIT_AUTHOR_NAME:-Claude Code Planning Agent}"
+git config --global user.email "${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}"
+
+# Inject SSH key from base64 env var if provided
+if [ -n "$SSH_PRIVATE_KEY_BASE64" ]; then
+    log_info "Injecting SSH key from SSH_PRIVATE_KEY_BASE64 env var..."
+    mkdir -p /home/runner/.ssh
+    echo "$SSH_PRIVATE_KEY_BASE64" | base64 -d > /home/runner/.ssh/id_ed25519
+    chmod 600 /home/runner/.ssh/id_ed25519
+fi
+
+# Configure SSH if keys are available
+setup_ssh
+
+log_info "Runner configured successfully!"
+log_info "Starting runner..."
+
+# Start the runner
+exec ./run.sh
