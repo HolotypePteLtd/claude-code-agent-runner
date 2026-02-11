@@ -78,7 +78,7 @@ RUN ACTIONS_RUNNER_VERSION="2.331.0" && \
 WORKDIR /actions-runner
 
 # Copy entrypoint script
-COPY --chmod=755 entrypoint.sh /actions-runner/entrypoint.sh
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Set up runner user permissions
 RUN chown -R runner:runner /actions-runner
@@ -95,4 +95,4 @@ ENV CLAUDE_CONFIG_DIR=/home/runner/.claude
 RUN flutter config --no-analytics && \
     flutter precache
 
-ENTRYPOINT ["/actions-runner/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
