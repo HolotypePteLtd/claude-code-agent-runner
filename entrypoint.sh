@@ -119,7 +119,7 @@ log_info "Runner name: ${GITHUB_RUNNER_NAME}"
 # This prevents stale registration issues when tokens expire
 if [ -f ".runner" ]; then
     log_info "Removing old runner configuration to re-register fresh..."
-    rm -f .runner .credentials .credentials_rsaparams
+    ./config.sh remove --token "${GITHUB_RUNNER_TOKEN}" 2>/dev/null || rm -f .runner .credentials .credentials_rsaparams
 fi
 
 log_info "Configuring runner..."

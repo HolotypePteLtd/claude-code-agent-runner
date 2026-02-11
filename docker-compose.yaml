@@ -12,7 +12,7 @@ services:
     environment:
       - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-1
     volumes:
-      - runner-data-1:/actions-runner
+      - runner-data-1:/actions-runner-1
       - claude-config:/home/runner/.claude
       - flutter-cache:/opt/flutter/.pub-cache
       - npm-cache:/home/runner/.npm
@@ -22,7 +22,7 @@ services:
     environment:
       - GITHUB_RUNNER_NAME=${GITHUB_RUNNER_NAME:-claude-runner}-2
     volumes:
-      - runner-data-2:/actions-runner
+      - runner-data-2:/actions-runner-2
       - claude-config:/home/runner/.claude
       - flutter-cache:/opt/flutter/.pub-cache
       - npm-cache:/home/runner/.npm
