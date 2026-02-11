@@ -108,10 +108,8 @@ if [ -n "$GITHUB_PAT" ]; then
         exit 1
     fi
     log_info "Registration token obtained successfully"
-elif [ -n "$GITHUB_RUNNER_TOKEN" ]; then
-    log_info "Using provided GITHUB_RUNNER_TOKEN (note: these expire after ~1 hour)"
 else
-    log_error "Either GITHUB_PAT or GITHUB_RUNNER_TOKEN must be set"
+    log_error "GITHUB_PAT must be set"
     exit 1
 fi
 
