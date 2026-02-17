@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libglu1-mesa \
     libicu74 \
     libssl3 \
+    openssl \
     openssh-client \
     clang cmake ninja-build pkg-config \
     libgtk-3-dev \
@@ -82,8 +83,10 @@ RUN ACTIONS_RUNNER_VERSION="2.331.0" && \
 # Create working directory for actions runner
 WORKDIR /actions-runner
 
-# Copy entrypoint script
+# Copy entrypoint script and GitHub App helper scripts
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 github-app-token.sh /usr/local/bin/github-app-token.sh
+COPY --chmod=755 git-credential-github-app.sh /usr/local/bin/git-credential-github-app.sh
 
 # Set up runner user permissions
 RUN chown -R runner:runner /actions-runner

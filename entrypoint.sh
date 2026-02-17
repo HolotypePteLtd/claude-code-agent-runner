@@ -50,6 +50,55 @@ setup_ssh() {
     fi
 }
 
+# Setup GitHub App authentication (if configured)
+setup_github_app() {
+    # Skip silently if not all three env vars are set
+    if [ -z "${GITHUB_APP_ID:-}" ] || [ -z "${GITHUB_APP_PRIVATE_KEY_BASE64:-}" ] || [ -z "${GITHUB_APP_INSTALLATION_ID:-}" ]; then
+        return 0
+    fi
+
+    log_info "GitHub App credentials detected, configuring GitHub App authentication..."
+
+    # Test token generation
+    local token
+    if ! token=$(github-app-token.sh get 2>&1); then
+        log_warn "GitHub App token generation failed: ${token}"
+        log_warn "Falling back to SSH authentication."
+        return 0
+    fi
+
+    log_info "GitHub App installation token generated successfully!"
+
+    # Configure git credential helper for HTTPS
+    git config --global credential.helper '/usr/local/bin/git-credential-github-app.sh'
+
+    # Rewrite SSH URLs to HTTPS so the credential helper is used
+    git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+    # Authenticate gh CLI with the token
+    if echo "$token" | gh auth login --with-token 2>/dev/null; then
+        log_info "gh CLI authenticated via GitHub App token."
+    else
+        log_warn "gh CLI authentication with GitHub App token failed."
+    fi
+
+    # Start background loop to refresh the gh CLI token every 45 minutes
+    (
+        while true; do
+            sleep 2700  # 45 minutes
+            if refresh_token=$(github-app-token.sh refresh 2>/dev/null); then
+                echo "$refresh_token" | gh auth login --with-token 2>/dev/null \
+                    && log_info "gh CLI token refreshed via GitHub App." \
+                    || log_warn "gh CLI token refresh failed."
+            else
+                log_warn "GitHub App token refresh failed."
+            fi
+        done
+    ) &
+
+    log_info "GitHub App authentication configured."
+}
+
 # Setup mode: pause for manual configuration (e.g. claude login)
 if [ "${SETUP_MODE}" = "true" ] || [ "${SETUP_MODE}" = "1" ]; then
     log_info "=== SETUP MODE ==="
@@ -135,6 +184,9 @@ log_info "Configuring runner..."
 # Configure git
 git config --global user.name "${GIT_AUTHOR_NAME:-Claude Code Planning Agent}"
 git config --global user.email "${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}"
+
+# Configure GitHub App authentication (if env vars are set)
+setup_github_app
 
 # Inject SSH key from base64 env var if provided
 if [ -n "$SSH_PRIVATE_KEY_BASE64" ]; then

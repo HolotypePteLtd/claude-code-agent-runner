@@ -7,7 +7,7 @@ Deploy one or more GitHub Actions self-hosted runners with Claude Code, each con
 - A Coolify instance with a connected server
 - A GitHub repo or org where you have admin access (to generate runner tokens)
 - An Anthropic API key
-- An SSH key pair for git push access (optional but recommended)
+- A GitHub App for org-wide repo access (recommended), **or** an SSH key pair for single-repo push access
 
 ## Steps
 
@@ -46,7 +46,36 @@ Or, if using a proxy:
 | `ANTHROPIC_BASE_URL` | Proxy base URL |
 | `ANTHROPIC_AUTH_TOKEN` | Proxy auth token |
 
-**SSH (for git push):**
+**GitHub App (recommended — gives access to all org repos):**
+
+| Variable | Description |
+|---|---|
+| `GITHUB_APP_ID` | Numeric App ID from the GitHub App settings page |
+| `GITHUB_APP_PRIVATE_KEY_BASE64` | Base64-encoded PEM private key (see below) |
+| `GITHUB_APP_INSTALLATION_ID` | Numeric installation ID for the org |
+
+All three must be set to enable GitHub App auth. If any are missing, SSH is used instead.
+
+To set up a GitHub App:
+
+1. Go to your org's **Settings > Developer settings > GitHub Apps > New GitHub App**
+2. Give it a name (e.g. `claude-runner`), set the Homepage URL to anything
+3. Under **Repository permissions**, grant **Contents: Read & write** (and any other permissions your workflows need)
+4. Create the app and note the **App ID** from the settings page
+5. Generate a **private key** — a `.pem` file will download
+6. Install the app on your org (Settings > Developer settings > GitHub Apps > your app > Install App)
+7. Note the **Installation ID** from the URL: `https://github.com/organizations/{org}/settings/installations/{id}`
+8. Base64-encode the private key:
+
+```bash
+cat your-app.private-key.pem | base64 -w0
+```
+
+On macOS, use `base64` without `-w0` (it doesn't wrap by default).
+
+Mark `GITHUB_APP_PRIVATE_KEY_BASE64` as a **Secret** in Coolify.
+
+**SSH (fallback — for single-repo git push):**
 
 | Variable | Description |
 |---|---|
@@ -92,7 +121,9 @@ Click **Deploy**. Coolify will build the Docker image and start the container. T
 
 ### 6. Verify
 
-- Check container logs in Coolify for `"Runner configured successfully!"` and `"SSH connection to GitHub successful!"`
+- Check container logs in Coolify for `"Runner configured successfully!"`
+- If using GitHub App auth, look for `"GitHub App installation token generated successfully!"`
+- If using SSH, look for `"SSH connection to GitHub successful!"`
 - In GitHub, go to Settings > Actions > Runners — your runner should appear as **Idle**
 
 ## Running multiple instances
