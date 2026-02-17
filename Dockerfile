@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y \
     libicu74 \
     libssl3 \
     openssh-client \
+    clang cmake ninja-build pkg-config \
+    libgtk-3-dev \
+    xvfb \
+    ffmpeg \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js LTS
