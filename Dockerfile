@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-dev \
     xvfb \
     ffmpeg \
-    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libasound2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js LTS
