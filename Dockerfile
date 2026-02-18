@@ -39,7 +39,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     rm -rf /var/lib/apt/lists/*
 
 # Install Flutter SDK
-ENV FLUTTER_VERSION=3.38.0
+ENV FLUTTER_VERSION=3.41.0
 ENV FLUTTER_HOME=/opt/flutter
 ENV PATH="${FLUTTER_HOME}/bin:${PATH}"
 
