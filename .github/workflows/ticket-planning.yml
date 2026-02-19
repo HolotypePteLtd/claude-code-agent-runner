@@ -39,8 +39,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Configure Git
@@ -172,8 +171,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Configure Git
@@ -309,7 +307,6 @@ jobs:
           set -x  # Enable command logging
           ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
           echo "Pushing branch: $ticket_id"
-          git config --local url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
           git push origin "$ticket_id"
           echo "Successfully pushed branch: $ticket_id"
 
