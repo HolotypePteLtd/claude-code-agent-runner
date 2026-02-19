@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-dev \
     xvfb \
     ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
+    libx264-dev libx265-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libasound2-dev lld \
     && rm -rf /var/lib/apt/lists/*
 
