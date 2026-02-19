@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     clang cmake ninja-build pkg-config \
     libgtk-3-dev \
     xvfb \
-    ffmpeg \
+    ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
     libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libasound2-dev lld \
     && rm -rf /var/lib/apt/lists/*
 
