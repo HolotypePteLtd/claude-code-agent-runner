@@ -276,7 +276,8 @@ jobs:
             - remove premature optimizations
             - simplify the implementation
           Don't make any changes unless you genuinely believe those changes will improve the implementation. It is acceptable to leave the codebase as-is if the implementation is already excellent. 
-          When complete, update the ticket file to set the status to 'unit-testing' and the assignee to 'glm', then commit to git, and push your changes." 2>&1 | tee /tmp/claude-output.log
+          When complete, update the ticket file to set the status to 'unit-testing' and the assignee to 'glm'. 
+          Use `git add` to stage all your changes (including the ticket file), commit, then push." 2>&1 | tee /tmp/claude-output.log
           elif [ "$ticket_status" = "unit-testing" ]; then
             claude --dangerously-skip-permissions -p "
             Run all the unit tests, widget tests in this repository. 
