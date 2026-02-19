@@ -58,7 +58,11 @@ jobs:
 
       - name: Run ${{ matrix.test }}
         run: |
-          flutter test integration_test/${{ matrix.test }}
+          if [ "$(uname)" = "Linux" ]; then
+            xvfb-run flutter test integration_test/${{ matrix.test }}
+          else
+            flutter test integration_test/${{ matrix.test }}
+          fi
 
       - name: Commit and push outputs
         run: |
