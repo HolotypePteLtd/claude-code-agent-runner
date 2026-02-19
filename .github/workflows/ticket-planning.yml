@@ -60,11 +60,11 @@ jobs:
             ticket_file=".tickets/${{ inputs.ticket_id }}.md"
             if [ -f "$ticket_file" ]; then
               status=$(grep -m1 '^status:' "$ticket_file" | sed 's/status: *//')
-              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ] || [ "$status" = "refactoring" ] || [ "$status" = "unit-testing" ] || [ "$status" = "integration-testing" ]; then
                 tickets+=("$ticket_file")
                 statuses+=("$status")
               else
-                echo "Error: Ticket status must be 'planning' or 'agent-implementing', found: $status"
+                echo "Error: Ticket status must be 'planning', 'agent-implementing', 'refactoring', 'unit-testing', or 'integration-testing', found: $status"
                 exit 1
               fi
             else
@@ -74,11 +74,11 @@ jobs:
 
           elif [ "${{ inputs.trigger_type }}" = "workflow_dispatch" ]; then
             # Manual trigger without ticket_id - scan ALL tickets
-            echo "Scanning all tickets for planning or agent-implementing status..."
+            echo "Scanning all tickets for actionable statuses..."
             for file in .tickets/*.md; do
               if [ -f "$file" ]; then
                 status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
-                if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ] || [ "$status" = "refactoring" ] || [ "$status" = "unit-testing" ] || [ "$status" = "integration-testing" ]; then
                   tickets+=("$file")
                   statuses+=("$status")
                 fi
@@ -93,12 +93,12 @@ jobs:
 
             if [ -f "$ticket_file" ]; then
               status=$(grep -m1 '^status:' "$ticket_file" | sed 's/status: *//')
-              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+              if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ] || [ "$status" = "refactoring" ] || [ "$status" = "unit-testing" ] || [ "$status" = "integration-testing" ]; then
                 tickets+=("$ticket_file")
                 statuses+=("$status")
                 echo "Found matching ticket file: $ticket_file (status: $status)"
               else
-                echo "Ticket file $ticket_file exists but has status: $status (not planning or agent-implementing)"
+                echo "Ticket file $ticket_file exists but has status: $status (not an actionable status)"
               fi
             else
               echo "No matching ticket file found: $ticket_file"
@@ -122,7 +122,7 @@ jobs:
               for file in $changed_files; do
                 if [ -f "$file" ]; then
                   status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
-                  if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                  if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ] || [ "$status" = "refactoring" ] || [ "$status" = "unit-testing" ] || [ "$status" = "integration-testing" ] ; then
                     tickets+=("$file")
                     statuses+=("$status")
                   fi
@@ -135,7 +135,7 @@ jobs:
                 if [ "$file" = "$ticket_file" ]; then
                   if [ -f "$file" ]; then
                     status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
-                    if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ]; then
+                    if [ "$status" = "planning" ] || [ "$status" = "agent-implementing" ] || [ "$status" = "refactoring" ] || [ "$status" = "unit-testing" ] || [ "$status" = "integration-testing" ]; then
                       tickets+=("$file")
                       statuses+=("$status")
                     fi
@@ -205,7 +205,7 @@ jobs:
               git checkout "${{ inputs.ref_name }}"
               git checkout -b "$ticket_id"
             fi
-          elif [ "$ticket_status" = "agent-implementing" ]; then
+          elif [ "$ticket_status" = "agent-implementing" ] || [ "$ticket_status" = "refactoring" ] || [ "$ticket_status" = "unit-testing" ] || [ "$ticket_status" = "integration-testing" ]; then
             if git rev-parse --verify "origin/$ticket_id" >/dev/null 2>&1; then
               echo "Checking out existing branch: $ticket_id"
               git checkout "$ticket_id"
@@ -266,8 +266,32 @@ jobs:
           elif [ "$ticket_status" = "agent-implementing" ]; then
             claude --dangerously-skip-permissions -p "Implement the changes described in ticket ${ticket_id}. Follow the plan in the ticket file.
             Follow all other instructions in AGENTS.md. You don't need to wait until you have finished implementing to commit your work; commit regularly and push to remote.
-            When you have finished, update the ticket file (set the status to 'implemented'), then commit and push.
+            When you have finished, update the ticket file to set the status to 'refactoring', then commit and push.
             You have full authority to make code changes, run tests, update the ticket file, commit to git, push and open a pull request." 2>&1 | tee /tmp/claude-output.log
+          elif [ "$ticket_status" = "refactoring" ]; then
+            claude --dangerously-skip-permissions -p "Review the changes made in this branch since it diverged, and if applicable, refactor to:
+            - remove dead code and dead code paths
+            - remove excessive parameters
+            - follow the existing code patterns and structures used in the repository 
+            - remove premature optimizations
+            - simplify the implementation
+          Don't make any changes unless you genuinely believe those changes will improve the implementation. It is acceptable to leave the codebase as-is if the implementation is already excellent. 
+          When complete, update the ticket file to set the status to 'unit-testing' and the assignee to 'glm', then commit to git, and push your changes." 2>&1 | tee /tmp/claude-output.log
+          elif [ "$ticket_status" = "unit-testing" ]; then
+            claude --dangerously-skip-permissions -p "
+            Run all the unit tests, widget tests in this repository. 
+            If there are any nested packages that have tests, run all of those tests from the respective package directory.
+            Ignore integration tests, we will run those separately. 
+            If any tests fail, update the ticket with details of what failed, set the status to 'agent-implementing' and the assignee to 'opus'.
+            If all tests pass, update the ticket with status 'integration-testing'.
+            In either case, commit to git and push your changes." 2>&1 | tee /tmp/claude-output.log
+          elif [ "$ticket_status" = "integration-testing" ]; then
+            claude --dangerously-skip-permissions -p "
+            If there are any integration tests in this repository, run each integration test file individually (using the correct -d switch to set the platform you are currently running on).
+            After all tests have run, run `git status` to see whether any screenshots have been generated by the integration tests, and if so, use `git add` to add them. 
+            If any tests fail, update the ticket with details of what failed, set the status to 'agent-implementing' and the assignee to 'opus'. The next agent will attempt to fix the issue. 
+            If all tests pass, update the ticket with status 'implemented'. 
+            In either case, commit to git and push your changes." 2>&1 | tee /tmp/claude-output.log
           fi
 
           echo "=========================================="
