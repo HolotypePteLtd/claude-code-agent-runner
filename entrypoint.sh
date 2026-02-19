@@ -19,6 +19,16 @@ log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Ensure GitHub is in known_hosts (needed by actions/checkout even for HTTPS)
+setup_known_hosts() {
+    mkdir -p /home/runner/.ssh
+    chmod 700 /home/runner/.ssh
+    if ! grep -q "github.com" /home/runner/.ssh/known_hosts 2>/dev/null; then
+        log_info "Adding GitHub to known_hosts..."
+        ssh-keyscan github.com >> /home/runner/.ssh/known_hosts 2>/dev/null
+    fi
+}
+
 # Setup SSH configuration if keys are available
 setup_ssh() {
     if [ -d "/home/runner/.ssh" ]; then
@@ -27,16 +37,8 @@ setup_ssh() {
             log_info "SSH keys detected, configuring SSH for GitHub..."
 
             # Ensure proper permissions
-            chmod 700 /home/runner/.ssh
             chmod 600 /home/runner/.ssh/id_* 2>/dev/null || true
             chmod 644 /home/runner/.ssh/*.pub 2>/dev/null || true
-
-            # Add GitHub to known_hosts if not already present
-            if ! grep -q "github.com" /home/runner/.ssh/known_hosts 2>/dev/null; then
-                log_info "Adding GitHub to known_hosts..."
-                mkdir -p /home/runner/.ssh
-                ssh-keyscan github.com >> /home/runner/.ssh/known_hosts 2>/dev/null
-            fi
 
             # Test SSH connection
             if ssh -o BatchMode=yes -o ConnectTimeout=5 git@github.com &>/dev/null; then
@@ -184,6 +186,9 @@ log_info "Configuring runner..."
 # Configure git
 git config --global user.name "${GIT_AUTHOR_NAME:-Claude Code Planning Agent}"
 git config --global user.email "${GIT_AUTHOR_EMAIL:-claude-planning@github-actions.local}"
+
+# Always ensure GitHub is in known_hosts
+setup_known_hosts
 
 # Configure GitHub App authentication (if env vars are set)
 setup_github_app
