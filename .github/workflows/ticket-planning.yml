@@ -41,11 +41,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git
+      - name: Configure Git with GitHub App token
         run: |
           git config --global user.name "Claude Code Planning Agent"
           git config --global user.email "claude-planning@github-actions.local"
-          git config --unset-all http.https://github.com/.extraheader || true
+
+          APP_TOKEN=$(github-app-token.sh get)
+          REPO_URL=$(git remote get-url origin | sed 's|https://.*@github.com/|https://github.com/|' | sed 's|https://github.com/|https://x-access-token:'"$APP_TOKEN"'@github.com/|')
+          git remote set-url origin "$REPO_URL"
 
       - name: Find tickets to process
         id: planning-tickets
@@ -173,15 +176,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git
+      - name: Configure Git with GitHub App token
         run: |
           git config --global user.name "Claude Code Planning Agent"
           git config --global user.email "claude-planning@github-actions.local"
-          # Remove local credential overrides set by actions/checkout so that
-          # the global GitHub App credential helper is used for push operations.
-          # This ensures pushes are attributed to the GitHub App (not GITHUB_TOKEN),
-          # which allows pushed commits to trigger subsequent workflow runs.
-          git config --unset-all http.https://github.com/.extraheader || true
+
+          # Get a GitHub App installation token so pushes trigger subsequent workflows
+          # (pushes via GITHUB_TOKEN do not trigger workflows by design)
+          APP_TOKEN=$(github-app-token.sh get)
+          echo "APP_TOKEN=$APP_TOKEN" >> $GITHUB_ENV
+
+          # Replace the remote URL with one that uses the app token
+          REPO_URL=$(git remote get-url origin | sed 's|https://.*@github.com/|https://github.com/|' | sed 's|https://github.com/|https://x-access-token:'"$APP_TOKEN"'@github.com/|')
+          git remote set-url origin "$REPO_URL"
 
       - name: Extract ticket ID and setup branch
         id: ticket-setup
@@ -345,4 +352,5 @@ jobs:
             echo "Successfully created pull request for: $ticket_id"
           fi
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.APP_TOKEN }}
+          # Falls back to GITHUB_TOKEN if APP_TOKEN is not set
