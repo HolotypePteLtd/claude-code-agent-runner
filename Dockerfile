@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     openssl \
     openssh-client \
-    clang cmake ninja-build pkg-config \
+    clang cmake ninja-build pkg-config libc++-dev libc++abi-dev \
     libgtk-3-dev \
     xvfb \
     ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
