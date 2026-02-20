@@ -29,44 +29,14 @@ setup_known_hosts() {
     fi
 }
 
-# Setup SSH configuration if keys are available
-setup_ssh() {
-    if [ -d "/home/runner/.ssh" ]; then
-        # Check if any SSH keys exist
-        if [ -f "/home/runner/.ssh/id_ed25519" ] || [ -f "/home/runner/.ssh/id_rsa" ]; then
-            log_info "SSH keys detected, configuring SSH for GitHub..."
-
-            # Ensure proper permissions
-            chmod 600 /home/runner/.ssh/id_* 2>/dev/null || true
-            chmod 644 /home/runner/.ssh/*.pub 2>/dev/null || true
-
-            # Test SSH connection
-            if ssh -o BatchMode=yes -o ConnectTimeout=5 git@github.com &>/dev/null; then
-                log_info "SSH connection to GitHub successful!"
-            else
-                log_warn "SSH keys found but connection to GitHub failed. SSH operations may not work."
-            fi
-        else
-            log_info "No SSH keys found in /home/runner/.ssh, SSH not configured."
-        fi
-    fi
-}
-
-# Setup GitHub App authentication (if configured)
+# Setup GitHub App authentication for git operations
 setup_github_app() {
-    # Skip silently if not all three env vars are set
-    if [ -z "${GITHUB_APP_ID:-}" ] || [ -z "${GITHUB_APP_PRIVATE_KEY_BASE64:-}" ] || [ -z "${GITHUB_APP_INSTALLATION_ID:-}" ]; then
-        return 0
-    fi
+    log_info "Configuring GitHub App authentication for git..."
 
-    log_info "GitHub App credentials detected, configuring GitHub App authentication..."
-
-    # Test token generation
     local token
     if ! token=$(github-app-token.sh get 2>&1); then
-        log_warn "GitHub App token generation failed: ${token}"
-        log_warn "Falling back to SSH authentication."
-        return 0
+        log_error "GitHub App token generation failed: ${token}"
+        exit 1
     fi
 
     log_info "GitHub App installation token generated successfully!"
@@ -136,33 +106,30 @@ else
     exit 1
 fi
 
-# Obtain runner registration token
-# If GITHUB_PAT is set, auto-generate a fresh registration token via the API
-# Otherwise fall back to GITHUB_RUNNER_TOKEN (which expires after ~1 hour)
-if [ -n "$GITHUB_PAT" ]; then
-    log_info "Generating fresh runner registration token using PAT..."
-    if [ -n "$GITHUB_REPO" ]; then
-        # Repo-level runner
-        API_URL="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runners/registration-token"
-    else
-        # Org-level runner
-        API_URL="https://api.github.com/orgs/${GITHUB_OWNER}/actions/runners/registration-token"
-    fi
-    RESPONSE=$(curl -s -X POST \
-        -H "Authorization: Bearer ${GITHUB_PAT}" \
-        -H "Accept: application/vnd.github+json" \
-        "$API_URL")
-    GITHUB_RUNNER_TOKEN=$(echo "$RESPONSE" | jq -r '.token')
-    if [ -z "$GITHUB_RUNNER_TOKEN" ]; then
-        log_error "Failed to generate registration token. API response:"
-        echo "$RESPONSE"
-        exit 1
-    fi
-    log_info "Registration token obtained successfully"
+# Obtain runner registration token using GitHub App installation token
+log_info "Generating GitHub App token for runner registration..."
+APP_TOKEN=$(github-app-token.sh get 2>&1) || {
+    log_error "Failed to generate GitHub App token: ${APP_TOKEN}"
+    exit 1
+}
+
+if [ -n "$GITHUB_REPO" ]; then
+    API_URL="https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runners/registration-token"
 else
-    log_error "GITHUB_PAT must be set"
+    API_URL="https://api.github.com/orgs/${GITHUB_OWNER}/actions/runners/registration-token"
+fi
+
+RESPONSE=$(curl -s -X POST \
+    -H "Authorization: Bearer ${APP_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    "$API_URL")
+GITHUB_RUNNER_TOKEN=$(echo "$RESPONSE" | jq -r '.token')
+if [ -z "$GITHUB_RUNNER_TOKEN" ] || [ "$GITHUB_RUNNER_TOKEN" = "null" ]; then
+    log_error "Failed to generate registration token. API response:"
+    echo "$RESPONSE"
     exit 1
 fi
+log_info "Registration token obtained successfully"
 
 log_info "Runner name: ${GITHUB_RUNNER_NAME}"
 
@@ -192,17 +159,6 @@ setup_known_hosts
 
 # Configure GitHub App authentication (if env vars are set)
 setup_github_app
-
-# Inject SSH key from base64 env var if provided
-if [ -n "$SSH_PRIVATE_KEY_BASE64" ]; then
-    log_info "Injecting SSH key from SSH_PRIVATE_KEY_BASE64 env var..."
-    mkdir -p /home/runner/.ssh
-    echo "$SSH_PRIVATE_KEY_BASE64" | base64 -d > /home/runner/.ssh/id_ed25519
-    chmod 600 /home/runner/.ssh/id_ed25519
-fi
-
-# Configure SSH if keys are available
-setup_ssh
 
 log_info "Runner configured successfully!"
 log_info "Starting runner..."
