@@ -5,6 +5,7 @@ x-runner-common: &runner-common
     dockerfile: Dockerfile
   env_file: .env
   restart: unless-stopped
+  cpus: ${RUNNER_CPUS:-2.0}
 
 services:
   runner-1:

@@ -44,6 +44,11 @@ setup_github_app() {
     # Configure git credential helper for HTTPS
     git config --global credential.helper '/usr/local/bin/git-credential-github-app.sh'
 
+    # Remove any reverse insteadOf rules (SSH←HTTPS) that may have been added
+    # by tools like Claude Code and persisted via volume mounts
+    git config --global --unset-all url."git@github.com:".insteadOf 2>/dev/null || true
+    git config --global --unset-all url."ssh://git@github.com/".insteadOf 2>/dev/null || true
+
     # Rewrite SSH URLs to HTTPS so the credential helper is used
     git config --global url."https://github.com/".insteadOf "git@github.com:"
 
