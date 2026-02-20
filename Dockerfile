@@ -88,6 +88,7 @@ WORKDIR /actions-runner
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=755 github-app-token.sh /usr/local/bin/github-app-token.sh
 COPY --chmod=755 git-credential-github-app.sh /usr/local/bin/git-credential-github-app.sh
+COPY --chmod=755 cleanup-git-config.sh /usr/local/bin/cleanup-git-config.sh
 
 # Set up runner user permissions
 RUN chown -R runner:runner /actions-runner
@@ -99,6 +100,7 @@ USER runner
 ENV PATH="${FLUTTER_HOME}/bin:/home/runner/.local/bin:/usr/local/share/npm-global/bin:${PATH}"
 ENV HOME=/home/runner
 ENV CLAUDE_CONFIG_DIR=/home/runner/.claude
+ENV ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/cleanup-git-config.sh
 
 # Configure Flutter as runner user
 RUN flutter config --no-analytics && \
