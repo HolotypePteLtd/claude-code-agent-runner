@@ -58,15 +58,15 @@ jobs:
           tickets=()
           statuses=()
 
-          # Define actionable statuses in ONE place
-          ACTIONABLE_STATUSES="planning|agent-implementing|refactoring|unit-testing|integration-testing"
+          # Define actionable statuses in ONE place (added rebase)
+          ACTIONABLE_STATUSES="planning|agent-implementing|refactoring|unit-testing|integration-testing|rebase"
 
           # Helper function to check if status is actionable
           is_actionable_status() {
             echo "$1" | grep -qE "^($ACTIONABLE_STATUSES)$"
           }
 
-          if [ "${{ inputs.trigger_type }}" = "workflow_dispatch" ] && [ -n "${{ inputs.ticket_id }}" ]; then
+          if[ "${{ inputs.trigger_type }}" = "workflow_dispatch" ] &&[ -n "${{ inputs.ticket_id }}" ]; then
             # Manual trigger with specific ticket
             ticket_file=".tickets/${{ inputs.ticket_id }}.md"
             if [ -f "$ticket_file" ]; then
@@ -83,7 +83,7 @@ jobs:
               exit 1
             fi
 
-          elif [ "${{ inputs.trigger_type }}" = "workflow_dispatch" ]; then
+          elif[ "${{ inputs.trigger_type }}" = "workflow_dispatch" ]; then
             # Manual trigger without ticket_id - scan ALL tickets
             echo "Scanning all tickets for actionable statuses..."
             for file in .tickets/*.md; do
@@ -131,7 +131,7 @@ jobs:
             if [ "$branch_name" = "master" ]; then
               # On master: process all changed ticket files
               for file in $changed_files; do
-                if [ -f "$file" ]; then
+                if[ -f "$file" ]; then
                   status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
                   if is_actionable_status "$status"; then
                     tickets+=("$file")
@@ -143,7 +143,7 @@ jobs:
               # On feature branch: only process the ticket file matching this branch name
               ticket_file=".tickets/${branch_name}.md"
               for file in $changed_files; do
-                if [ "$file" = "$ticket_file" ]; then
+                if[ "$file" = "$ticket_file" ]; then
                   if [ -f "$file" ]; then
                     status=$(grep -m1 '^status:' "$file" | sed 's/status: *//')
                     if is_actionable_status "$status"; then
@@ -242,14 +242,14 @@ jobs:
           assignee=$(grep -m1 '^assignee:' "$ticket_file" | sed 's/assignee: *//' || echo "")
 
           # Skip ticket if assignee is not opus or glm
-          if [ "$assignee" != "opus" ] && [ "$assignee" != "glm" ]; then
+          if [ "$assignee" != "opus" ] &&[ "$assignee" != "glm" ]; then
             echo "Skipping ticket: assignee is '$assignee' (only 'opus' and 'glm' are supported)"
             exit 0
           fi
 
           # Load credentials based on assignee
           echo "Ticket assigned to: $assignee"
-          if [ "$assignee" = "glm" ]; then
+          if[ "$assignee" = "glm" ]; then
             echo "Setting GLM credentials"
             export ANTHROPIC_BASE_URL="$GLM_ANTHROPIC_BASE_URL"
             export ANTHROPIC_AUTH_TOKEN="$GLM_ANTHROPIC_AUTH_TOKEN"
@@ -278,7 +278,7 @@ jobs:
               You have full authority to make code changes, run tests, update the ticket file and commit to git. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             rebase)
-              claude --dangerously-skip-permissions -p "The branch that this branch diverged from (and/or some dependencies) has changed since this branch was created. Rebase this branch, then force push this branch to remote" 2>&1 | tee /tmp/claude-output.log
+              claude --dangerously-skip-permissions -p "The branch that this branch diverged from (and/or some dependencies) has changed since this branch was created. Rebase this branch, then commit. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             refactoring)
               claude --dangerously-skip-permissions -p "Review the changes made in this branch since it diverged, and if applicable, refactor to:
@@ -289,7 +289,7 @@ jobs:
               - simplify the implementation
             Don't make any changes unless you genuinely believe those changes will improve the implementation. It is acceptable to leave the codebase as-is if the implementation is already excellent.
             When complete, update the ticket file to set the status to 'unit-testing' and the assignee to 'glm'.
-            Use `git add` to stage all your changes (including the ticket file) then commit. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
+            Use \`git add\` to stage all your changes (including the ticket file) then commit. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             unit-testing)
               claude --dangerously-skip-permissions -p "
@@ -304,7 +304,7 @@ jobs:
               claude --dangerously-skip-permissions -p "
               If there are any integration tests in this repository, run each integration test file individually (using the correct -d switch to set the platform you are currently running on).
               If you are running on Linux, you may need to use xvfb-run.
-              After all tests have run, run `git status` to see whether any screenshots have been generated by the integration tests, and if so, use `git add` to add them.
+              After all tests have run, run \`git status\` to see whether any screenshots have been generated by the integration tests, and if so, use \`git add\` to add them.
               If any tests fail, update the ticket with details of what failed, set the status to 'agent-implementing' and the assignee to 'opus'. The next agent will attempt to fix the issue.
               If all tests pass, update the ticket with status 'implemented'.
               In either case, commit to git. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
@@ -323,8 +323,15 @@ jobs:
         run: |
           set -x  # Enable command logging
           ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
+          ticket_status="${{ steps.ticket-setup.outputs.ticket_status }}"
           echo "Pushing branch: $ticket_id"
-          git push origin "$ticket_id"
+          
+          if [ "$ticket_status" = "rebase" ]; then
+            git push --force origin "$ticket_id"
+          else
+            git push origin "$ticket_id"
+          fi
+          
           echo "Successfully pushed branch: $ticket_id"
 
       - name: Create Pull Request
@@ -338,7 +345,7 @@ jobs:
 
           # Extract ticket title and description
           ticket_title=$(grep -m1 '^# ' "$ticket_file" | sed 's/^# //')
-          if [ -z "$ticket_title" ]; then
+          if[ -z "$ticket_title" ]; then
             ticket_title="$ticket_id"
           fi
 
