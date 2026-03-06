@@ -278,7 +278,8 @@ jobs:
               You have full authority to make code changes, run tests, update the ticket file and commit to git. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             rebase)
-              claude --dangerously-skip-permissions -p "The branch that this branch diverged from (and/or some dependencies) has changed since this branch was created. Rebase this branch, then commit. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
+              claude --dangerously-skip-permissions -p "This branch was created to implement ticket ${ticket_id}.
+              However, this branch and its parent branch (where it was created from) have now diverged. Rebase this branch onto its parent (usually master) and resolve any conflicts in the best way you can, given the plan in the ticket. Commit your changes, but don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             refactoring)
               claude --dangerously-skip-permissions -p "Review the changes made in this branch since it diverged, and if applicable, refactor to:
