@@ -279,7 +279,7 @@ jobs:
               ;;
             rebase)
               claude --dangerously-skip-permissions -p "This branch was created to implement ticket ${ticket_id}.
-              However, this branch and its parent branch (where it was created from) have now diverged. Rebase this branch onto its parent (usually master) and resolve any conflicts in the best way you can, given the plan in the ticket. Commit your changes, but don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
+              However, this branch and its parent branch (where it was created from) have now diverged. Merge the parent (usually master) into this branch and resolve any conflicts in the way that best implements the details in the ticket. Commit your changes, but don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
             refactoring)
               claude --dangerously-skip-permissions -p "Review the changes made in this branch since it diverged, and if applicable, refactor to:
