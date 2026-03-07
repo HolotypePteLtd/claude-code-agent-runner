@@ -47,8 +47,10 @@ jobs:
           git config --global user.name "Claude Code Planning Agent"
           git config --global user.email "claude-planning@github-actions.local"
 
-          APP_TOKEN=$(github-app-token.sh get)
-          REPO_URL=$(git remote get-url origin | sed 's|https://.*@github.com/|https://github.com/|' | sed 's|https://github.com/|https://x-access-token:'"$APP_TOKEN"'@github.com/|')
+          # Use credential helper for fresh tokens on each git operation
+          git config --global credential.helper '/usr/local/bin/git-credential-github-app.sh'
+          # Ensure clean HTTPS URL (credential helper only works with HTTPS, no embedded auth)
+          REPO_URL=$(git remote get-url origin | sed 's|git@github.com:|https://github.com/|' | sed 's|https://.*@github.com/|https://github.com/|')
           git remote set-url origin "$REPO_URL"
 
       - name: Find tickets to process
@@ -191,13 +193,11 @@ jobs:
           git config --global user.name "Claude Code Planning Agent"
           git config --global user.email "claude-planning@github-actions.local"
 
-          # Get a GitHub App installation token so pushes trigger subsequent workflows
-          # (pushes via GITHUB_TOKEN do not trigger workflows by design)
-          APP_TOKEN=$(github-app-token.sh get)
-          echo "APP_TOKEN=$APP_TOKEN" >> $GITHUB_ENV
-
-          # Replace the remote URL with one that uses the app token
-          REPO_URL=$(git remote get-url origin | sed 's|https://.*@github.com/|https://github.com/|' | sed 's|https://github.com/|https://x-access-token:'"$APP_TOKEN"'@github.com/|')
+          # Use credential helper for fresh tokens on each git operation
+          # (avoids token expiry on long-running jobs >1 hour)
+          git config --global credential.helper '/usr/local/bin/git-credential-github-app.sh'
+          # Ensure clean HTTPS URL (credential helper only works with HTTPS, no embedded auth)
+          REPO_URL=$(git remote get-url origin | sed 's|git@github.com:|https://github.com/|' | sed 's|https://.*@github.com/|https://github.com/|')
           git remote set-url origin "$REPO_URL"
 
       - name: Extract ticket ID and setup branch
@@ -326,6 +326,11 @@ jobs:
           ticket_status="${{ steps.ticket-setup.outputs.ticket_status }}"
           ticket_id="${{ steps.ticket-setup.outputs.ticket_id }}"
 
+          # Get a fresh GitHub App token for gh CLI
+          # (GitHub App tokens ensure PR creation triggers subsequent workflows,
+          # unlike GITHUB_TOKEN which does not by design)
+          export GH_TOKEN=$(github-app-token.sh get)
+
           echo "Creating pull request for ticket: $ticket_id"
 
           # Extract ticket title and description
@@ -349,6 +354,3 @@ jobs:
               --body "$ticket_content"
             echo "Successfully created pull request for: $ticket_id"
           fi
-        env:
-          GH_TOKEN: ${{ env.APP_TOKEN }}
-          # Falls back to GITHUB_TOKEN if APP_TOKEN is not set
