@@ -273,7 +273,10 @@ jobs:
               ;;
             agent-implementing)
               claude --dangerously-skip-permissions -p "Implement the changes described in ticket ${ticket_id}. Follow the plan in the ticket file.
-              Follow all other instructions in AGENTS.md. You don't need to wait until you have finished implementing to commit your work; commit regularly (but don't push to remote, I will handle that myself).
+              Follow all other instructions in AGENTS.md where possible. You are in non-interactive mode, so I will not be able to answer your questions. 
+              If you have a question, or AGENTS.md instructs you to ask me about something, guess what would my answer would be given the instruction.
+              If AGENTS.md tells you to ask me about running tests, just run them without asking.
+              You don't need to wait until you have finished implementing to commit your work; commit regularly (but don't push to remote, I will handle that myself).
               When you have finished, update the ticket file to set the status to 'refactoring', then commit.
               You have full authority to make code changes, run tests, update the ticket file and commit to git. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
