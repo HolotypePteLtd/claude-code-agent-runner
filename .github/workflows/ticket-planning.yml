@@ -60,8 +60,7 @@ jobs:
           tickets=()
           statuses=()
 
-          # Define actionable statuses in ONE place (added rebase)
-          ACTIONABLE_STATUSES="planning|agent-implementing|refactoring|rebase"
+          ACTIONABLE_STATUSES="planning|agent-implementing|refactoring|rebasing|reviewing-plan"
 
           # Helper function to check if status is actionable
           is_actionable_status() {
@@ -280,7 +279,7 @@ jobs:
               When you have finished, update the ticket file to set the status to 'refactoring', then commit.
               You have full authority to make code changes, run tests, update the ticket file and commit to git. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
               ;;
-            rebase)
+            rebasing)
               claude --dangerously-skip-permissions -p "This branch was created to implement ticket ${ticket_id}.
               However, this branch and its parent branch (where it was created from) have now diverged. Merge the parent (usually master) into this branch and resolve any conflicts in the way that best implements the details in the ticket.
               When all conflicts are resolved, update the ticket file to set the status to 'ready-for-review'.
@@ -296,6 +295,13 @@ jobs:
             Don't make any changes unless you genuinely believe those changes will improve the implementation. It is acceptable to leave the codebase as-is if the implementation is already excellent.
             When complete, update the ticket file to set the status to 'ready-for-review'.
             Use \`git add\` to stage all your changes (including the ticket file) then commit. Don't push to remote, I will handle that myself." 2>&1 | tee /tmp/claude-output.log
+              ;;
+            reviewing-plan)
+              claude --dangerously-skip-permissions -p "Review the plan proposed in the ticket ${ticket_id}. 
+              Does the plan duplicate or override existing functionality. If so, should that existing functionality be deleted?
+              Does the plan following all existing code patterns in the codebase?
+              Does the plan bloat any code? Is there any reusable abstraction that we could factor out and use to achieve the same result?
+              "2>&1 | tee /tmp/claude-output.log
               ;;
           esac
 
@@ -314,7 +320,7 @@ jobs:
           ticket_status="${{ steps.ticket-setup.outputs.ticket_status }}"
           echo "Pushing branch: $ticket_id"
           
-          if [ "$ticket_status" = "rebase" ]; then
+          if [ "$ticket_status" = "rebasing" ]; then
             git push --force origin "$ticket_id"
           else
             git push origin "$ticket_id"
